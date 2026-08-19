@@ -1,12 +1,12 @@
 class MentorModel {
   final String id;
   final String userId;
-  final String employeeId;
   final String name;
   final String email;
   final String phone;
   final String collegeId;
-  final String departmentCode;
+  final List<String> departmentCodes;
+  final List<String> academicYears;
   final String designation;
   final String? profilePhoto;
   final int assignedStudentsCount;
@@ -17,16 +17,16 @@ class MentorModel {
   const MentorModel({
     required this.id,
     required this.userId,
-    required this.employeeId,
     required this.name,
-    required this.email,
-    required this.phone,
-    required this.collegeId,
-    required this.departmentCode,
-    this.designation = 'Lead Coordinator',
+    this.email = '',
+    this.phone = '',
+    this.collegeId = 'smvec_puducherry_main',
+    required this.departmentCodes,
+    required this.academicYears,
+    this.designation = 'Faculty Mentor',
     this.profilePhoto,
     this.assignedStudentsCount = 0,
-    this.maxCapacity = 5,
+    this.maxCapacity = 15,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -35,12 +35,12 @@ class MentorModel {
     return {
       'id': id,
       'userId': userId,
-      'employeeId': employeeId,
       'name': name,
       'email': email,
       'phone': phone,
       'collegeId': collegeId,
-      'departmentCode': departmentCode,
+      'departmentCodes': departmentCodes,
+      'academicYears': academicYears,
       'designation': designation,
       'profilePhoto': profilePhoto,
       'assignedStudentsCount': assignedStudentsCount,
@@ -54,16 +54,16 @@ class MentorModel {
     return MentorModel(
       id: id,
       userId: map['userId'] ?? '',
-      employeeId: map['employeeId'] ?? '',
       name: map['name'] ?? '',
       email: map['email'] ?? '',
       phone: map['phone'] ?? '',
-      collegeId: map['collegeId'] ?? '',
-      departmentCode: map['departmentCode'] ?? '',
-      designation: map['designation'] ?? 'Lead Coordinator',
+      collegeId: map['collegeId'] ?? 'smvec_puducherry_main',
+      departmentCodes: List<String>.from(map['departmentCodes'] ?? (map['departmentCode'] != null ? [map['departmentCode']] : ['IT'])),
+      academicYears: List<String>.from(map['academicYears'] ?? ['3rd Year', '4th Year']),
+      designation: map['designation'] ?? 'Faculty Mentor',
       profilePhoto: map['profilePhoto'],
       assignedStudentsCount: map['assignedStudentsCount'] ?? 0,
-      maxCapacity: map['maxCapacity'] ?? 5,
+      maxCapacity: map['maxCapacity'] ?? 15,
       createdAt: map['createdAt'] != null
           ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),

@@ -1,24 +1,24 @@
-import 'user_role.dart';
-
-class UserModel {
+class HodModel {
   final String id;
+  final String userId;
+  final String name;
   final String email;
-  final String displayName;
-  final UserRole role;
   final String collegeId;
-  final String? photoUrl;
-  final String? phoneNumber;
+  final String departmentCode;
+  final String designation;
+  final String? profilePhoto;
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  const UserModel({
+  const HodModel({
     required this.id,
-    required this.email,
-    required this.displayName,
-    required this.role,
+    required this.userId,
+    required this.name,
+    this.email = '',
     this.collegeId = 'smvec_puducherry_main',
-    this.photoUrl,
-    this.phoneNumber,
+    required this.departmentCode,
+    this.designation = 'Head of the Department',
+    this.profilePhoto,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -26,26 +26,28 @@ class UserModel {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'userId': userId,
+      'name': name,
       'email': email,
-      'displayName': displayName,
-      'role': role.value,
       'collegeId': collegeId,
-      'photoUrl': photoUrl,
-      'phoneNumber': phoneNumber,
+      'departmentCode': departmentCode,
+      'designation': designation,
+      'profilePhoto': profilePhoto,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
-  factory UserModel.fromMap(Map<String, dynamic> map, String id) {
-    return UserModel(
+  factory HodModel.fromMap(Map<String, dynamic> map, String id) {
+    return HodModel(
       id: id,
+      userId: map['userId'] ?? '',
+      name: map['name'] ?? '',
       email: map['email'] ?? '',
-      displayName: map['displayName'] ?? map['name'] ?? '',
-      role: UserRole.fromString(map['role']),
       collegeId: map['collegeId'] ?? 'smvec_puducherry_main',
-      photoUrl: map['photoUrl'],
-      phoneNumber: map['phoneNumber'],
+      departmentCode: map['departmentCode'] ?? 'IT',
+      designation: map['designation'] ?? 'Head of the Department',
+      profilePhoto: map['profilePhoto'],
       createdAt: map['createdAt'] != null
           ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),

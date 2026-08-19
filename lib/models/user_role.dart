@@ -1,12 +1,12 @@
 /// InternPulse Role System
 /// 
-/// Enforces structured role authorization across Student, Mentor, and Admin
+/// Enforces structured role authorization across Student, Mentor, and Head of Department (HOD)
 library;
 
 enum UserRole {
   student,
   mentor,
-  admin;
+  hod;
 
   String get value => name;
 
@@ -16,16 +16,18 @@ enum UserRole {
         return 'Student';
       case UserRole.mentor:
         return 'Mentor';
-      case UserRole.admin:
-        return 'Admin';
+      case UserRole.hod:
+        return 'Head of Department (HOD)';
     }
   }
 
   static UserRole fromString(String? value) {
     if (value == null) return UserRole.student;
     switch (value.toLowerCase().trim()) {
+      case 'hod':
+      case 'headofdepartment':
       case 'admin':
-        return UserRole.admin;
+        return UserRole.hod;
       case 'mentor':
         return UserRole.mentor;
       case 'student':

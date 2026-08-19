@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../core/theme/color_schemes.dart';
+import '../../../../models/user_role.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,9 +12,75 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
+  
   bool _obscurePassword = true;
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _identifierController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _handleLogin() async {
+    setState(() {
+      _errorMessage = null;
+    });
+
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Simulate authentication & role lookup from database record
+    await Future.delayed(const Duration(milliseconds: 700));
+
+    if (!mounted) return;
+
+    final input = _identifierController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+
+    if (password.length < 6) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Invalid credentials. Please check your email/ID and password.';
+      });
+      return;
+    }
+
+    // Role determined automatically from authenticated user's record
+    UserRole determinedRole;
+    if (input.contains('hod') || input.contains('head') || input.startsWith('hod')) {
+      determinedRole = UserRole.hod;
+    } else if (input.contains('mentor') || input.contains('faculty') || input.startsWith('fac')) {
+      determinedRole = UserRole.mentor;
+    } else {
+      determinedRole = UserRole.student;
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    final targetRoute = AppRoutes.getInitialRouteForRole(determinedRole);
+    context.go(targetRoute);
+  }
+
+  void _fillPreset(String email, String password) {
+    _identifierController.text = email;
+    _passwordController.text = password;
+    setState(() {
+      _errorMessage = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // College / App Identity
+                  // InternPulse Logo
                   Center(
                     child: Container(
                       width: 56,
@@ -37,6 +104,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       decoration: BoxDecoration(
                         color: PulseColors.primary,
                         borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: PulseColors.primary.withOpacity(0.2),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: const Icon(
                         Icons.bolt_rounded,
@@ -66,99 +140,212 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: PulseColors.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 32),
 
                   // Login Form Card
                   Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(28),
                     decoration: BoxDecoration(
                       color: PulseColors.surfaceContainerLowest,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: PulseColors.outlineVariant),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text(
-                          'Sign In',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: PulseColors.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        
-                        // Email Field
-                        TextField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
-                            labelText: 'Institutional Email',
-                            hintText: 'name@smvec.ac.in',
-                            prefixIcon: Icon(Icons.email_outlined),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Password Field
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                              ),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () => context.push(AppRoutes.forgotPassword),
-                            child: const Text('Forgot Password?'),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Quick Role Sign In for UI Preview
-                        ElevatedButton(
-                          onPressed: () => context.go(AppRoutes.studentDashboard),
-                          child: const Text('Sign In as Student'),
-                        ),
-                        const SizedBox(height: 10),
-                        OutlinedButton(
-                          onPressed: () => context.go(AppRoutes.mentorDashboard),
-                          child: const Text('Sign In as Mentor'),
-                        ),
-                        const SizedBox(height: 10),
-                        TextButton(
-                          onPressed: () => context.go(AppRoutes.adminDashboard),
-                          child: const Text('Sign In as Admin'),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
                         ),
                       ],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'Welcome back',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: PulseColors.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Sign in with your institutional credentials',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: PulseColors.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Error alert
+                          if (_errorMessage != null) ...[
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: PulseColors.errorContainer,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: PulseColors.error.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.error_outline_rounded, size: 18, color: PulseColors.error),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _errorMessage!,
+                                      style: const TextStyle(
+                                        color: PulseColors.error,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
+                          // Email / Student ID Field
+                          TextFormField(
+                            controller: _identifierController,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: const InputDecoration(
+                              labelText: 'Email / Student ID',
+                              hintText: 'e.g. 23IT001 or name@smvec.ac.in',
+                              prefixIcon: Icon(Icons.person_outline_rounded),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter your Email or Student ID';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Password Field
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              hintText: '••••••••',
+                              prefixIcon: const Icon(Icons.lock_outline_rounded),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                  size: 20,
+                                ),
+                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your password';
+                              }
+                              if (value.length < 6) {
+                                return 'Password must be at least 6 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 8),
+
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => context.push(AppRoutes.forgotPassword),
+                              child: const Text('Forgot Password?'),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Login Action Button with Loading State
+                          ElevatedButton(
+                            onPressed: _isLoading ? null : _handleLogin,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : const Text('Login'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
                   const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Don't have an account?",
-                        style: TextStyle(color: PulseColors.onSurfaceVariant),
-                      ),
-                      TextButton(
-                        onPressed: () => context.push(AppRoutes.register),
-                        child: const Text('Register'),
-                      ),
-                    ],
+
+                  // Demo Credentials Quick Access
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: PulseColors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: PulseColors.outlineVariant),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Demo Quick Sign-In Accounts:',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: PulseColors.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => _fillPreset('student@smvec.ac.in', 'password123'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                child: const Text('Student', style: TextStyle(fontSize: 11)),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => _fillPreset('mentor@smvec.ac.in', 'password123'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                child: const Text('Mentor', style: TextStyle(fontSize: 11)),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => _fillPreset('hod@smvec.ac.in', 'password123'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                child: const Text('HOD', style: TextStyle(fontSize: 11)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

@@ -2,21 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../models/user_role.dart';
 
-// Placeholder / presentation screens
+// Authentication
 import '../features/authentication/presentation/screens/login_screen.dart';
 import '../features/authentication/presentation/screens/register_screen.dart';
 import '../features/authentication/presentation/screens/forgot_password_screen.dart';
 import '../features/authentication/presentation/screens/onboarding_screen.dart';
+
+// Student
 import '../features/student/presentation/screens/student_dashboard_screen.dart';
 import '../features/student/presentation/screens/student_tasks_screen.dart';
 import '../features/student/presentation/screens/student_update_progress_screen.dart';
+
+// Mentor
 import '../features/mentor/presentation/screens/mentor_dashboard_screen.dart';
 import '../features/mentor/presentation/screens/mentor_student_monitoring_screen.dart';
 import '../features/mentor/presentation/screens/mentor_at_risk_screen.dart';
 import '../features/mentor/presentation/screens/mentor_activity_screen.dart';
-import '../features/admin/presentation/screens/admin_dashboard_screen.dart';
-import '../features/admin/presentation/screens/admin_student_management_screen.dart';
-import '../features/admin/presentation/screens/admin_mentor_assignment_screen.dart';
+
+// HOD (Head of Department)
+import '../features/hod/presentation/screens/hod_dashboard_screen.dart';
+import '../features/hod/presentation/screens/hod_students_screen.dart';
+import '../features/hod/presentation/screens/hod_departments_screen.dart';
+import '../features/hod/presentation/screens/hod_mentors_screen.dart';
+import '../features/hod/presentation/screens/hod_at_risk_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -38,10 +46,12 @@ class AppRoutes {
   static const String mentorAtRisk = '/mentor/at-risk';
   static const String mentorLiveActivity = '/mentor/live-activity';
 
-  // Admin Routes
-  static const String adminDashboard = '/admin/dashboard';
-  static const String adminStudents = '/admin/students';
-  static const String adminMentorAssignment = '/admin/mentor-assignment';
+  // HOD (Head of Department) Routes
+  static const String hodDashboard = '/hod/dashboard';
+  static const String hodStudents = '/hod/students';
+  static const String hodDepartments = '/hod/departments';
+  static const String hodMentors = '/hod/mentors';
+  static const String hodAtRisk = '/hod/at-risk';
 
   /// Helper to route to the correct landing screen based on authenticated role
   static String getInitialRouteForRole(UserRole role) {
@@ -50,8 +60,8 @@ class AppRoutes {
         return studentDashboard;
       case UserRole.mentor:
         return mentorDashboard;
-      case UserRole.admin:
-        return adminDashboard;
+      case UserRole.hod:
+        return hodDashboard;
     }
   }
 }
@@ -59,7 +69,7 @@ class AppRoutes {
 final appRouter = GoRouter(
   initialLocation: AppRoutes.login,
   routes: [
-    // Authentication Flow
+    // Authentication Flow (Entry screen for unauthenticated users)
     GoRoute(
       path: AppRoutes.login,
       builder: (context, state) => const LoginScreen(),
@@ -109,18 +119,26 @@ final appRouter = GoRouter(
       builder: (context, state) => const MentorActivityScreen(),
     ),
 
-    // Admin Flow
+    // HOD (Head of Department) Flow
     GoRoute(
-      path: AppRoutes.adminDashboard,
-      builder: (context, state) => const AdminDashboardScreen(),
+      path: AppRoutes.hodDashboard,
+      builder: (context, state) => const HodDashboardScreen(),
     ),
     GoRoute(
-      path: AppRoutes.adminStudents,
-      builder: (context, state) => const AdminStudentManagementScreen(),
+      path: AppRoutes.hodStudents,
+      builder: (context, state) => const HodStudentsScreen(),
     ),
     GoRoute(
-      path: AppRoutes.adminMentorAssignment,
-      builder: (context, state) => const AdminMentorAssignmentScreen(),
+      path: AppRoutes.hodDepartments,
+      builder: (context, state) => const HodDepartmentsScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.hodMentors,
+      builder: (context, state) => const HodMentorsScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.hodAtRisk,
+      builder: (context, state) => const HodAtRiskScreen(),
     ),
   ],
 );
