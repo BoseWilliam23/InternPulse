@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { RegisterStudentParams } from '../core/auth/authUser';
 import { COLLEGE_NAME } from '../core/auth/demoAccounts';
+import { AppLogo } from './AppLogo';
 
 interface RegisterPageProps {
   onRegister: (params: RegisterStudentParams) => Promise<void>;
@@ -114,11 +115,16 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
         
         {/* Brand Header */}
         <div className="text-center mb-6">
-          <div className="w-13 h-13 bg-[#24389C] rounded-2xl flex items-center justify-center text-white mx-auto shadow-md mb-2.5">
-            <Zap className="w-7 h-7 text-white fill-white" />
+          <div className="flex justify-center mb-2">
+            <AppLogo 
+              size="xl" 
+              showText={true}
+              showTagline={true}
+              layout="vertical"
+              className="mx-auto" 
+            />
           </div>
-          <h1 className="text-2xl font-bold text-[#1A1B22] tracking-tight">InternPulse</h1>
-          <p className="text-xs text-[#57657A] font-medium mt-0.5">
+          <p className="text-xs text-[#57657A] font-medium mt-1">
             Sri Manakula Vinayagar Engineering College (SMVEC)
           </p>
         </div>

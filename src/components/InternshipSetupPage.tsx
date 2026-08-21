@@ -10,6 +10,7 @@ import {
   GraduationCap
 } from 'lucide-react';
 import { AuthUser, InternshipSetupParams } from '../core/auth/authUser';
+import { AppLogo } from './AppLogo';
 
 interface InternshipSetupPageProps {
   currentUser: AuthUser;
@@ -75,6 +76,20 @@ export const InternshipSetupPage: React.FC<InternshipSetupPageProps> = ({
     <div className="min-h-screen bg-[#FBF8FF] flex flex-col justify-center items-center px-4 py-10 selection:bg-[#DEE0FF]">
       <div className="max-w-xl w-full">
         
+        {/* Brand Header */}
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-2">
+            <AppLogo 
+              size="lg" 
+              showText={true}
+              showTagline={true}
+              layout="vertical"
+              className="mx-auto" 
+            />
+          </div>
+          <p className="text-xs text-[#57657A] font-medium mt-1">Sri Manakula Vinayagar Engineering College (SMVEC)</p>
+        </div>
+
         {/* Step Indicator */}
         <div className="flex items-center justify-between mb-6 px-2">
           <div className="flex items-center space-x-2 text-xs font-semibold text-[#57657A]">

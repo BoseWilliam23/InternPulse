@@ -5,7 +5,8 @@ import {
   RefreshCw,
   Database,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  ImageIcon
 } from 'lucide-react';
 import { StudentRecord } from './data/initialData';
 import { LoginPage } from './components/LoginPage';
@@ -16,6 +17,8 @@ import { StudentDashboard } from './components/StudentDashboard';
 import { MentorDashboard } from './components/MentorDashboard';
 import { HodDashboard } from './components/HodDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
+import { AppLogo } from './components/AppLogo';
+import { LogoUploadModal } from './components/LogoUploadModal';
 import { authService } from './core/auth/authService';
 import { AuthUser, RegisterStudentParams, InternshipSetupParams } from './core/auth/authUser';
 import { internshipRepository } from './core/repository/internshipRepository';
@@ -34,6 +37,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
   const [authLoading, setAuthLoading] = useState(false);
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const [isSubmittingLog, setIsSubmittingLog] = useState(false);
 
@@ -354,19 +358,21 @@ export default function App() {
           <div className="flex items-center justify-between h-16">
             
             {/* Institution & App Brand */}
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-[#24389C] flex items-center justify-center text-white shadow-sm font-bold text-lg">
-                <Zap className="w-5 h-5 text-white fill-white" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h1 className="font-bold text-lg text-[#1A1B22] tracking-tight">InternPulse</h1>
-                  <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-[#DEE0FF] text-[#00105C]">
-                    SMVEC
-                  </span>
-                </div>
-                <p className="text-xs text-[#57657A]">Sri Manakula Vinayagar Engineering College</p>
-              </div>
+            <div className="flex items-center space-x-2">
+              <AppLogo 
+                size="md" 
+                showText={true} 
+                clickable={true}
+                onClick={() => setIsLogoModalOpen(true)}
+              />
+              <button
+                type="button"
+                onClick={() => setIsLogoModalOpen(true)}
+                title="Customize or upload app logo image"
+                className="p-1.5 rounded-lg text-[#757684] hover:text-[#24389C] hover:bg-[#EFEDF6] transition-colors"
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Right Header: Supabase Sync Status + User Badge + Logout */}
@@ -466,6 +472,12 @@ export default function App() {
         )}
 
       </main>
+
+      {/* App Logo Customization Modal */}
+      <LogoUploadModal
+        isOpen={isLogoModalOpen}
+        onClose={() => setIsLogoModalOpen(false)}
+      />
     </div>
   );
 }

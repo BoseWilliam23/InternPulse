@@ -15,11 +15,14 @@ import {
   Shield,
   GraduationCap,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  ImageIcon
 } from 'lucide-react';
 import { authService } from '../core/auth/authService';
 import { UserRole } from '../core/auth/authUser';
 import { fetchSupabaseLiveSampleLogins, SampleLoginAccount } from '../core/auth/demoAccounts';
+import { AppLogo } from './AppLogo';
+import { LogoUploadModal } from './LogoUploadModal';
 
 interface LoginPageProps {
   onLogin: (emailOrId: string, password: string) => Promise<void>;
@@ -38,6 +41,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
 
   // Live Supabase table accounts (HODs & Mentors)
   const [supabaseHods, setSupabaseHods] = useState<SampleLoginAccount[]>([]);
@@ -145,14 +149,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         
         {/* Institutional Branding */}
         <div className="text-center mb-6">
-          <div className="w-14 h-14 bg-[#24389C] rounded-2xl flex items-center justify-center text-white mx-auto shadow-md mb-3">
-            <Zap className="w-8 h-8 text-white fill-white" />
+          <div className="flex flex-col items-center justify-center mb-2">
+            <AppLogo 
+              size="xl" 
+              showText={true}
+              showTagline={true}
+              layout="vertical"
+              clickable={true}
+              onClick={() => setIsLogoModalOpen(true)}
+              className="mx-auto"
+            />
+            <p className="text-xs text-[#57657A] font-medium mt-2">
+              Sri Manakula Vinayagar Engineering College (SMVEC)
+            </p>
           </div>
-          <h1 className="text-2xl font-bold text-[#1A1B22] tracking-tight">InternPulse</h1>
-          <p className="text-xs text-[#57657A] font-medium mt-1">
-            Sri Manakula Vinayagar Engineering College (SMVEC)
-          </p>
-          <div className="inline-flex items-center space-x-1.5 px-3 py-1 mt-2.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold">
+          <div className="inline-flex items-center space-x-1.5 px-3 py-1 mt-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold">
             <Database className="w-3.5 h-3.5 text-emerald-600" />
             <span>Supabase Database & Auth Live</span>
           </div>
@@ -574,6 +585,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           </div>
         )}
+
+        {/* Modal to customize app logo */}
+        <LogoUploadModal
+          isOpen={isLogoModalOpen}
+          onClose={() => setIsLogoModalOpen(false)}
+        />
 
       </div>
     </div>
