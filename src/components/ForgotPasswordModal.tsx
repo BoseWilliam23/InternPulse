@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Mail, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
+import { X, Mail, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { authService } from '../core/auth/authService';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -9,27 +10,46 @@ interface ForgotPasswordModalProps {
 export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
-    setSubmitted(true);
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const res = await authService.resetPassword(email);
+      if (res.success) {
+        setSuccessMessage(res.message);
+        setSubmitted(true);
+      } else {
+        setError(res.message || 'Failed to send reset link.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error communicating with Supabase Auth.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E3E1EA] animate-in fade-in zoom-in duration-200">
+      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#E3E1EA] animate-in fade-in zoom-in duration-200">
         <div className="flex items-center justify-between pb-3 border-b border-[#E3E1EA]">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-xl bg-[#24389C] text-white flex items-center justify-center font-bold">
               <Mail className="w-4 h-4" />
             </div>
-            <h3 className="font-bold text-base text-[#1A1B22]">Forgot Password</h3>
+            <h3 className="font-bold text-base text-[#1A1B22]">Reset Password</h3>
           </div>
           <button
-            onClick={() => { setSubmitted(false); onClose(); }}
+            onClick={() => { setSubmitted(false); setError(null); onClose(); }}
             className="p-1 rounded-lg text-[#757684] hover:bg-[#EFEDF6]"
           >
             <X className="w-5 h-5" />
@@ -39,8 +59,15 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
         {!submitted ? (
           <form onSubmit={handleSubmit} className="space-y-4 mt-4 text-xs">
             <p className="text-[#57657A] leading-relaxed">
-              Enter your registered SMVEC institutional email address or student ID to verify account recovery.
+              Enter your registered Supabase email address. A password recovery link will be dispatched to your inbox.
             </p>
+
+            {error && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
             <div>
               <label className="block font-semibold text-[#1A1B22] mb-1.5">Registered Email</label>
@@ -50,18 +77,11 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="student@internpulse.demo or your.email@smvec.ac.in"
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#E3E1EA] focus:outline-none focus:border-[#24389C] text-xs"
+                  placeholder="your.email@college.edu"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#E3E1EA] focus:outline-none focus:border-[#24389C] text-xs bg-[#FBF8FF]"
                   required
                 />
               </div>
-            </div>
-
-            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-900 flex items-start space-x-2">
-              <ShieldAlert className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] leading-relaxed">
-                <strong>Prototype Environment Note:</strong> Password reset with dynamic email dispatch will be handled via Firebase Authentication in the production release.
-              </p>
             </div>
 
             <div className="flex justify-end space-x-2 pt-2">
@@ -74,23 +94,24 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#24389C] text-white hover:bg-[#1E2E80]"
+                disabled={loading}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#24389C] text-white hover:bg-[#1E2E80] disabled:opacity-60"
               >
-                Reset Password
+                {loading ? 'Sending...' : 'Send Reset Link'}
               </button>
             </div>
           </form>
         ) : (
           <div className="space-y-4 mt-4 text-xs">
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 space-y-2">
-              <div className="flex items-center space-x-2 font-bold text-amber-900">
-                <CheckCircle2 className="w-4 h-4 text-amber-600" />
-                <span>Password Recovery Request Recorded</span>
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 space-y-2">
+              <div className="flex items-center space-x-2 font-bold text-emerald-900">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Supabase Password Reset Link Sent</span>
               </div>
-              <p className="text-[11px] text-amber-800 leading-relaxed">
-                "Password reset is available in the production Firebase authentication version."
+              <p className="text-[11px] text-emerald-800 leading-relaxed">
+                {successMessage || `A reset email has been dispatched via Supabase Auth.`}
               </p>
-              <div className="pt-2 border-t border-amber-200/60 font-mono text-[11px]">
+              <div className="pt-2 border-t border-emerald-200/60 font-mono text-[11px]">
                 Target: {email}
               </div>
             </div>

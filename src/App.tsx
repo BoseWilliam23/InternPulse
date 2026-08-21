@@ -2,9 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Zap, 
   LogOut, 
-  ChevronDown
+  RefreshCw,
+  Database,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
-import { StudentRecord, DEFAULT_STUDENTS } from './data/initialData';
+import { StudentRecord } from './data/initialData';
 import { LoginPage } from './components/LoginPage';
 import { RegisterPage } from './components/RegisterPage';
 import { InternshipSetupPage } from './components/InternshipSetupPage';
@@ -16,7 +19,6 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { authService } from './core/auth/authService';
 import { AuthUser, RegisterStudentParams, InternshipSetupParams } from './core/auth/authUser';
 import { internshipRepository } from './core/repository/internshipRepository';
-import { DEMO_ACCOUNTS } from './core/auth/demoAccounts';
 
 type AppRoute = 
   | '/login' 
@@ -35,9 +37,6 @@ export default function App() {
   const [dataVersion, setDataVersion] = useState(0);
   const [isSubmittingLog, setIsSubmittingLog] = useState(false);
 
-  // Quick Switcher dropdown state in Header for seamless demo/testing
-  const [isQuickSwitchOpen, setIsQuickSwitchOpen] = useState(false);
-
   // 2. Navigation Routing
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     const user = authService.getCurrentUser();
@@ -49,6 +48,14 @@ export default function App() {
     if (user.role === 'admin') return '/admin/dashboard';
     return '/login';
   });
+
+  // Subscribe to Supabase Auth State changes
+  useEffect(() => {
+    const unsubscribeAuth = authService.initAuthListener((user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribeAuth();
+  }, []);
 
   // Role Enforcement & Route Synchronization
   useEffect(() => {
@@ -71,6 +78,14 @@ export default function App() {
     }
   }, [currentUser, currentRoute]);
 
+  // Subscribe to repository real-time updates (Supabase + Local)
+  useEffect(() => {
+    const unsubscribe = internshipRepository.subscribe(() => {
+      setDataVersion(v => v + 1);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Read institutional students list
   const totalStudents = useMemo(() => {
     return internshipRepository.getAllStudentsForAdmin();
@@ -79,13 +94,31 @@ export default function App() {
   // Scoped Data for active Student
   const activeStudentData = useMemo(() => {
     if (!currentUser || currentUser.role !== 'student') {
-      return totalStudents[0] || DEFAULT_STUDENTS[0];
+      return {
+        id: 'EMPTY',
+        studentId: 'ST_EMPTY',
+        studentName: 'Student',
+        academicYear: '3rd Year',
+        year: '3rd Year',
+        departmentCode: 'CSEBS',
+        dept: 'CSEBS',
+        company: 'Not Assigned',
+        mentor: 'Not Assigned',
+        mentorId: '',
+        role: 'Intern',
+        status: 'onTrack',
+        progress: 0,
+        hours: 0,
+        work: 'No logs submitted.',
+        time: 'Today',
+      } as StudentRecord;
     }
     const studentId = currentUser.studentId || currentUser.id;
     const found = internshipRepository.getStudentById(studentId);
     if (found) return found;
 
-    // Fallback for newly registered student
+    // Fallback for registered student
+    const dept = currentUser.departmentCode || currentUser.dept?.split(' ')[0] || 'CSEBS';
     return {
       id: currentUser.id,
       studentId: studentId,
@@ -93,20 +126,20 @@ export default function App() {
       email: currentUser.email,
       year: currentUser.year || '3rd Year',
       academicYear: currentUser.year || '3rd Year',
-      dept: currentUser.departmentCode || currentUser.dept || 'IT',
-      departmentCode: currentUser.departmentCode || currentUser.dept || 'IT',
+      dept: dept,
+      departmentCode: dept,
       company: currentUser.company || 'Host Organization',
-      mentor: 'Dr. M. Auxilia',
-      mentorId: 'MENTOR001',
-      mentorEmail: 'auxilia.mentor@college.edu',
+      mentor: 'Faculty Mentor',
+      mentorId: 'MENTOR_CSEBS_01',
+      mentorEmail: 'anitha.mentor@college.edu',
       role: currentUser.internshipRole || 'Intern',
       status: 'onTrack',
-      progress: 25,
-      hours: 8,
-      work: currentUser.internshipDescription || 'Internship setup complete.',
+      progress: 0,
+      hours: 0,
+      work: currentUser.internshipDescription || 'Internship setup complete. Submit daily logs to start tracking.',
       time: 'Today',
     } as StudentRecord;
-  }, [currentUser, dataVersion, totalStudents]);
+  }, [currentUser, dataVersion]);
 
   // Scoped Data for active Mentor
   const mentorAssignedStudents = useMemo(() => {
@@ -115,7 +148,7 @@ export default function App() {
   }, [currentUser, dataVersion]);
 
   // Scoped Data for active HOD
-  const hodDepartmentCode = currentUser?.departmentCode || currentUser?.dept?.split(' ')[0] || 'IT';
+  const hodDepartmentCode = currentUser?.departmentCode || currentUser?.dept?.split(' ')[0] || 'CSEBS';
   const hodDepartmentStudents = useMemo(() => {
     if (!currentUser || currentUser.role !== 'hod') return [];
     return internshipRepository.getStudentsForHod(hodDepartmentCode);
@@ -154,14 +187,6 @@ export default function App() {
     }
   };
 
-  // Quick switch role (Helper for prototype testing of all 4 roles)
-  const handleQuickSwitchUser = (demoUser: AuthUser) => {
-    authService.logout();
-    localStorage.setItem('internpulse_auth_user', JSON.stringify(demoUser));
-    setCurrentUser(demoUser);
-    setIsQuickSwitchOpen(false);
-  };
-
   // Handle Student Registration
   const handleRegisterStudent = async (params: RegisterStudentParams) => {
     setAuthLoading(true);
@@ -190,6 +215,9 @@ export default function App() {
       if (resp.success && resp.user) {
         setCurrentUser(resp.user);
 
+        const studentDept = resp.user.departmentCode || resp.user.dept || 'CSEBS';
+        const defaultMentor = { name: 'Prof. Anitha Kumar', id: 'MENTOR_CSEBS_01', email: 'anitha.mentor@college.edu' };
+
         // Add or update the student record in our repository
         const newRecord: StudentRecord = {
           id: resp.user.id,
@@ -198,12 +226,12 @@ export default function App() {
           email: resp.user.email,
           year: resp.user.year || '3rd Year',
           academicYear: resp.user.year || '3rd Year',
-          dept: resp.user.departmentCode || resp.user.dept || 'IT',
-          departmentCode: resp.user.departmentCode || resp.user.dept || 'IT',
+          dept: studentDept,
+          departmentCode: studentDept,
           company: details.companyName,
-          mentor: 'Dr. M. Auxilia',
-          mentorId: 'MENTOR001',
-          mentorEmail: 'auxilia.mentor@college.edu',
+          mentor: defaultMentor.name,
+          mentorId: defaultMentor.id,
+          mentorEmail: defaultMentor.email,
           role: details.internshipRole,
           status: 'onTrack',
           progress: 10,
@@ -232,11 +260,10 @@ export default function App() {
   };
 
   // Handle Logout
-  const handleLogout = () => {
-    authService.logout();
+  const handleLogout = async () => {
+    await authService.logout();
     setCurrentUser(null);
     setCurrentRoute('/login');
-    setIsQuickSwitchOpen(false);
   };
 
   // Submit Daily Log for active student via repository
@@ -250,7 +277,7 @@ export default function App() {
     setIsSubmittingLog(true);
     try {
       const studentId = currentUser.studentId || currentUser.id;
-      internshipRepository.submitStudentDailyLog(studentId, {
+      await internshipRepository.submitStudentDailyLog(studentId, {
         work,
         hours,
         status,
@@ -342,71 +369,42 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right Header: User Badge + Role Switcher (Prototype Demo) + Logout */}
-            <div className="flex items-center space-x-3">
+            {/* Right Header: Supabase Sync Status + User Badge + Logout */}
+            <div className="flex items-center space-x-2 sm:space-x-3">
               
-              {/* Active User Identity Chip & Quick Role Switcher */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsQuickSwitchOpen(!isQuickSwitchOpen)}
-                  className="flex items-center space-x-2 bg-[#EFEDF6] hover:bg-[#E3E1EA] px-3 py-1.5 rounded-xl text-xs transition-all border border-[#E3E1EA]"
-                >
-                  <div className="w-6 h-6 rounded-full bg-[#24389C] text-white flex items-center justify-center font-bold text-[10px]">
-                    {currentUser?.name?.slice(0, 1) || 'U'}
-                  </div>
-                  <div className="text-left hidden sm:block">
-                    <div className="font-bold text-[#1A1B22] leading-tight text-xs flex items-center space-x-1">
-                      <span>{currentUser?.name}</span>
-                      <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 bg-[#DEE0FF] text-[#00105C] rounded">
-                        {currentUser?.role}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronDown className="w-3.5 h-3.5 text-[#57657A]" />
-                </button>
+              {/* Supabase Realtime Sync Button */}
+              <button
+                onClick={() => internshipRepository.syncWithSupabase()}
+                title="Sync live data with Supabase"
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-all text-xs font-semibold"
+              >
+                <Database className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden md:inline">Supabase Live</span>
+                <RefreshCw className={`w-3 h-3 text-emerald-600 ${internshipRepository.getSyncStatus().isSyncing ? 'animate-spin' : ''}`} />
+              </button>
 
-                {/* Quick Account Switcher Menu for Testing */}
-                {isQuickSwitchOpen && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl border border-[#E3E1EA] shadow-2xl p-2 z-50 text-xs">
-                    <div className="px-3 py-2 border-b border-[#E3E1EA] mb-1">
-                      <div className="font-bold text-[#1A1B22]">Role Testing Simulator</div>
-                      <div className="text-[10px] text-[#57657A]">Instant switch for role-based visibility test</div>
-                    </div>
-
-                    <div className="max-h-80 overflow-y-auto space-y-1">
-                      {DEMO_ACCOUNTS.map((acc, i) => {
-                        const isCurrent = currentUser?.email === acc.email;
-                        return (
-                          <button
-                            key={i}
-                            onClick={() => handleQuickSwitchUser(acc.user)}
-                            className={`w-full text-left p-2 rounded-xl transition-all flex items-center justify-between ${
-                              isCurrent ? 'bg-[#24389C] text-white font-bold' : 'hover:bg-[#EFEDF6] text-[#1A1B22]'
-                            }`}
-                          >
-                            <div>
-                              <div className="font-semibold">{acc.user.name}</div>
-                              <div className={`text-[10px] ${isCurrent ? 'text-indigo-100' : 'text-[#57657A]'}`}>
-                                {acc.user.id} • {acc.user.dept}
-                              </div>
-                            </div>
-                            <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-bold ${
-                              isCurrent ? 'bg-white text-[#24389C]' : 'bg-[#EFEDF6] text-[#57657A]'
-                            }`}>
-                              {acc.user.role}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+              {/* Active Supabase Auth User Identity Chip */}
+              <div className="flex items-center space-x-2 bg-[#EFEDF6] px-3 py-1.5 rounded-xl text-xs border border-[#E3E1EA]">
+                <div className="w-6 h-6 rounded-full bg-[#24389C] text-white flex items-center justify-center font-bold text-[10px]">
+                  {currentUser?.name?.slice(0, 1) || 'U'}
+                </div>
+                <div className="text-left hidden sm:block">
+                  <div className="font-bold text-[#1A1B22] leading-tight text-xs flex items-center space-x-1">
+                    <span className="truncate max-w-[120px]">{currentUser?.name}</span>
+                    <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 bg-[#DEE0FF] text-[#00105C] rounded">
+                      {currentUser?.role}
+                    </span>
                   </div>
-                )}
+                  <div className="text-[10px] text-[#57657A] truncate font-mono">
+                    {currentUser?.email}
+                  </div>
+                </div>
               </div>
 
               {/* Logout Button */}
               <button
                 onClick={handleLogout}
-                title="Logout from session"
+                title="Logout from Supabase Auth"
                 className="p-2 rounded-xl border border-[#E3E1EA] text-[#57657A] hover:text-rose-600 hover:bg-rose-50 transition-colors flex items-center space-x-1"
               >
                 <LogOut className="w-4 h-4" />

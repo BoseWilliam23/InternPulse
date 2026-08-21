@@ -1,7 +1,21 @@
-import { StudentRecord, MentorRecord, DEFAULT_STUDENTS, DEFAULT_MENTORS, MENTOR_ACCOUNTS_MAP } from '../../data/initialData';
-import { AuthUser } from '../auth/authUser';
+import { 
+  StudentRecord, 
+  MentorRecord, 
+  HodRecord 
+} from '../../data/initialData';
+import { 
+  getSupabaseClient, 
+  isSupabaseConfigured, 
+  DbStudent, 
+  DbMentor, 
+  DbHod 
+} from '../../lib/supabase';
 
 export interface IInternshipRepository {
+  // Status
+  isConfigured(): boolean;
+  getSyncStatus(): { isSyncing: boolean; lastSyncTime: Date | null; error: string | null };
+
   // Scoped student access
   getStudentById(studentId: string): StudentRecord | null;
   getStudentsForStudent(studentId: string): StudentRecord[];
@@ -14,6 +28,14 @@ export interface IInternshipRepository {
   getMentorsForHod(departmentCode: string): MentorRecord[];
   getAllMentorsForAdmin(): MentorRecord[];
 
+  // HOD access
+  getAllHods(): HodRecord[];
+  getHodByDepartment(departmentCode: string): HodRecord | null;
+
+  // Real-time synchronization
+  subscribe(listener: () => void): () => void;
+  syncWithSupabase(): Promise<void>;
+
   // Scoped mutations & real-time log submissions
   submitStudentDailyLog(
     studentId: string, 
@@ -23,76 +45,250 @@ export interface IInternshipRepository {
       status: StudentRecord['status']; 
       blocker?: string;
     }
-  ): StudentRecord;
+  ): Promise<StudentRecord>;
   
-  updateStudentMentor(studentId: string, newMentorId: string, newMentorName: string): void;
+  saveStudent(student: StudentRecord): Promise<void>;
+  updateStudentMentor(studentId: string, newMentorId: string, newMentorName: string): Promise<void>;
   replaceDataset(newStudents: StudentRecord[]): void;
   clearAllDataset(): void;
   getAllStudents(): StudentRecord[];
 }
 
-const DATASET_STORAGE_KEY = 'internpulse_dataset';
+const STORAGE_KEY = 'internpulse_students_store_v3';
+const MENTORS_STORAGE_KEY = 'internpulse_mentors_store_v3';
+const HODS_STORAGE_KEY = 'internpulse_hods_store_v3';
 
-class LocalInternshipRepository implements IInternshipRepository {
+class SupabaseIntegratedRepository implements IInternshipRepository {
   private students: StudentRecord[] = [];
+  private mentors: MentorRecord[] = [];
+  private hods: HodRecord[] = [];
+  private listeners: Set<() => void> = new Set();
+  private isSyncing = false;
+  private lastSyncTime: Date | null = null;
+  private syncError: string | null = null;
 
   constructor() {
+    // Clear legacy mock cached keys if any
+    try {
+      localStorage.removeItem('internpulse_dataset');
+      localStorage.removeItem('internpulse_students_store_v2');
+      localStorage.removeItem('internpulse_mentors_store_v2');
+      localStorage.removeItem('internpulse_hods_store_v2');
+    } catch {
+      // ignore
+    }
+
     this.loadFromStorage();
+    if (isSupabaseConfigured) {
+      this.syncWithSupabase();
+      this.initRealtimeSubscription();
+    }
+  }
+
+  public isConfigured(): boolean {
+    return isSupabaseConfigured;
+  }
+
+  public getSyncStatus() {
+    return {
+      isSyncing: this.isSyncing,
+      lastSyncTime: this.lastSyncTime,
+      error: this.syncError,
+    };
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notifyListeners(): void {
+    this.listeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (err) {
+        console.error('Error in repository listener:', err);
+      }
+    });
   }
 
   private loadFromStorage(): void {
     try {
-      const saved = localStorage.getItem(DATASET_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Normalize existing data to guarantee mentorId and departmentCode
+      const savedStudents = localStorage.getItem(STORAGE_KEY);
+      if (savedStudents) {
+        const parsed = JSON.parse(savedStudents);
+        if (Array.isArray(parsed)) {
           this.students = this.normalizeStudentRecords(parsed);
-          return;
+        }
+      }
+
+      const savedMentors = localStorage.getItem(MENTORS_STORAGE_KEY);
+      if (savedMentors) {
+        const parsed = JSON.parse(savedMentors);
+        if (Array.isArray(parsed)) {
+          this.mentors = parsed;
+        }
+      }
+
+      const savedHods = localStorage.getItem(HODS_STORAGE_KEY);
+      if (savedHods) {
+        const parsed = JSON.parse(savedHods);
+        if (Array.isArray(parsed)) {
+          this.hods = parsed;
         }
       }
     } catch (e) {
-      console.error('Error loading dataset from localStorage:', e);
+      console.error('Error loading data from localStorage:', e);
     }
-    this.students = [...DEFAULT_STUDENTS];
-    this.persistToStorage();
   }
 
   private normalizeStudentRecords(records: any[]): StudentRecord[] {
     return records.map((s, index) => {
-      const deptCode = s.departmentCode || s.dept || 'IT';
-      const mentorName = s.mentor || 'Dr. M. Auxilia';
-      const mentorId = s.mentorId || MENTOR_ACCOUNTS_MAP[mentorName] || 'MENTOR001';
+      const deptCode = (s.department_code || s.departmentCode || s.dept || 'CSEBS').toUpperCase();
+      const mentorName = s.mentor_name || s.mentor || 'Faculty Mentor';
+      const mentorId = s.mentor_id || s.mentorId || 'MENTOR_001';
 
       return {
-        id: s.id || s.studentId || `ST_${index + 1}`,
-        studentId: s.studentId || s.id || `23IT00${index + 1}`,
-        studentName: s.studentName || s.name || 'Student Intern',
-        email: s.email || `${(s.studentId || 'student').toLowerCase()}@smvec.ac.in`,
-        academicYear: s.academicYear || s.year || '3rd Year',
-        year: s.year || s.academicYear || '3rd Year',
-        departmentCode: deptCode.toUpperCase(),
-        dept: deptCode.toUpperCase(),
-        company: s.company || 'Host Organization',
+        id: s.id || s.student_id || s.studentId || `ST_${index + 1}`,
+        studentId: s.student_id || s.studentId || s.id || `STUDENT_${index + 1}`,
+        studentName: s.student_name || s.studentName || s.name || 'Student Intern',
+        email: s.email || `${(s.student_id || s.studentId || 'student').toLowerCase()}@college.edu`,
+        academicYear: s.academic_year || s.academicYear || s.year || '3rd Year',
+        year: s.year || s.academic_year || s.academicYear || '3rd Year',
+        departmentCode: deptCode,
+        dept: deptCode,
+        company: s.company || 'Not Assigned',
         mentorId: mentorId,
         mentor: mentorName,
-        mentorEmail: s.mentorEmail || 'faculty@college.edu',
+        mentorEmail: s.mentorEmail || `${mentorId.toLowerCase()}@college.edu`,
         role: s.role || 'Intern',
         status: s.status || 'onTrack',
-        progress: typeof s.progress === 'number' ? s.progress : 50,
-        hours: typeof s.hours === 'number' ? s.hours : 8,
-        work: s.work || 'Milestone sprint in progress.',
-        blocker: s.blocker,
-        time: s.time || 'Today',
+        progress: typeof s.progress === 'number' ? s.progress : 0,
+        hours: typeof s.hours === 'number' ? s.hours : 0,
+        work: s.work || 'No logs submitted yet.',
+        blocker: s.blocker || undefined,
+        time: s.last_log_at ? new Date(s.last_log_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (s.time || 'Recent'),
       };
     });
   }
 
   private persistToStorage(): void {
     try {
-      localStorage.setItem(DATASET_STORAGE_KEY, JSON.stringify(this.students));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.students));
+      localStorage.setItem(MENTORS_STORAGE_KEY, JSON.stringify(this.mentors));
+      localStorage.setItem(HODS_STORAGE_KEY, JSON.stringify(this.hods));
     } catch (e) {
-      console.error('Error persisting dataset to localStorage:', e);
+      console.error('Error persisting data to localStorage:', e);
+    }
+  }
+
+  // ====================================================
+  // SUPABASE REALTIME & SYNC ENGINE
+  // ====================================================
+  public async syncWithSupabase(): Promise<void> {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    this.isSyncing = true;
+    this.syncError = null;
+    try {
+      // 1. Fetch Students from Supabase
+      const { data: dbStudents, error: sErr } = await client
+        .from('students')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (sErr) {
+        console.warn('Supabase students query note:', sErr.message);
+      } else if (Array.isArray(dbStudents)) {
+        this.students = this.normalizeStudentRecords(dbStudents);
+      }
+
+      // 2. Fetch Mentors from Supabase
+      const { data: dbMentors, error: mErr } = await client
+        .from('mentors')
+        .select('*');
+
+      if (mErr) {
+        console.warn('Supabase mentors query note:', mErr.message);
+      } else if (Array.isArray(dbMentors)) {
+        this.mentors = dbMentors.map((m: DbMentor) => ({
+          id: m.mentor_id || m.id || 'MENTOR_001',
+          name: m.name,
+          email: m.email,
+          departmentCode: (m.department_code || 'CSEBS').toUpperCase(),
+          departmentCodes: [(m.department_code || 'CSEBS').toUpperCase()],
+          assignedStudentsCount: 0,
+          capacity: m.capacity || 10,
+          designation: m.designation || 'Assistant Professor',
+          studentIds: [],
+        }));
+      }
+
+      // 3. Fetch HODs from Supabase
+      const { data: dbHods, error: hErr } = await client
+        .from('hods')
+        .select('*');
+
+      if (hErr) {
+        console.warn('Supabase hods query note:', hErr.message);
+      } else if (Array.isArray(dbHods)) {
+        this.hods = dbHods.map((h: DbHod) => ({
+          id: h.hod_id || h.id || 'HOD_001',
+          hodId: h.hod_id || 'HOD_001',
+          name: h.name,
+          email: h.email,
+          departmentCode: (h.department_code || 'CSEBS').toUpperCase(),
+          phone: h.phone,
+          officeLocation: h.office_location,
+        }));
+      }
+
+      this.lastSyncTime = new Date();
+      this.persistToStorage();
+      this.notifyListeners();
+    } catch (err: any) {
+      this.syncError = err?.message || 'Failed to sync with Supabase';
+      console.warn('Supabase sync warning:', err);
+    } finally {
+      this.isSyncing = false;
+      this.notifyListeners();
+    }
+  }
+
+  private initRealtimeSubscription(): void {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    try {
+      client
+        .channel('schema-db-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'students' },
+          () => {
+            this.syncWithSupabase();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'mentors' },
+          () => {
+            this.syncWithSupabase();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'hods' },
+          () => {
+            this.syncWithSupabase();
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('Realtime subscription skipped:', err);
     }
   }
 
@@ -100,8 +296,9 @@ class LocalInternshipRepository implements IInternshipRepository {
   // 1. STUDENT SCOPED DATA ACCESS (OWN DATA ONLY)
   // ====================================================
   public getStudentById(studentId: string): StudentRecord | null {
+    if (!studentId) return null;
     const query = studentId.trim().toLowerCase();
-    return this.students.find(s => s.studentId.toLowerCase() === query || s.id.toLowerCase() === query) || null;
+    return this.students.find(s => s.studentId.toLowerCase() === query || s.id.toLowerCase() === query || (s.email && s.email.toLowerCase() === query)) || null;
   }
 
   public getStudentsForStudent(studentId: string): StudentRecord[] {
@@ -113,35 +310,39 @@ class LocalInternshipRepository implements IInternshipRepository {
   // 2. MENTOR SCOPED DATA ACCESS (ONLY ASSIGNED STUDENTS)
   // ====================================================
   public getStudentsForMentor(mentorIdOrName: string): StudentRecord[] {
+    if (!mentorIdOrName) return [];
     const query = mentorIdOrName.trim().toLowerCase();
     return this.students.filter(s => 
       s.mentorId?.toLowerCase() === query || 
-      s.mentor.toLowerCase() === query ||
-      (MENTOR_ACCOUNTS_MAP[s.mentor] && MENTOR_ACCOUNTS_MAP[s.mentor].toLowerCase() === query)
+      s.mentor.toLowerCase() === query
     );
   }
 
   // ====================================================
-  // 3. HOD SCOPED DATA ACCESS (ONLY THEIR DEPARTMENT)
+  // 3. HOD SCOPED DATA ACCESS (DEPARTMENT-SEPARATED)
   // ====================================================
   public getStudentsForHod(departmentCode: string): StudentRecord[] {
+    if (!departmentCode) return [];
     const dept = departmentCode.trim().toUpperCase();
-    return this.students.filter(s => s.departmentCode.toUpperCase() === dept || s.dept.toUpperCase() === dept);
+    return this.students.filter(s => 
+      s.departmentCode.toUpperCase() === dept || 
+      s.dept.toUpperCase() === dept
+    );
   }
 
   public getMentorsForHod(departmentCode: string): MentorRecord[] {
-    const dept = departmentCode.trim().toUpperCase();
+    const dept = (departmentCode || 'CSEBS').trim().toUpperCase();
     
-    // Get distinct mentors actively handling students in this department
-    const deptMentors = DEFAULT_MENTORS.filter(m => 
+    // Filter mentors belonging to this department
+    const deptMentors = this.mentors.filter(m => 
       m.departmentCode.toUpperCase() === dept || 
       m.departmentCodes.some(d => d.toUpperCase() === dept)
     );
 
-    // Compute live stats for each mentor within this department
+    // Calculate live analytics based on Supabase students
     return deptMentors.map(mentor => {
       const mentorStudents = this.students.filter(s => 
-        (s.mentorId === mentor.id || s.mentor.toLowerCase() === mentor.name.toLowerCase()) &&
+        (s.mentorId.toLowerCase() === mentor.id.toLowerCase() || s.mentor.toLowerCase() === mentor.name.toLowerCase()) &&
         (s.departmentCode.toUpperCase() === dept || s.dept.toUpperCase() === dept)
       );
 
@@ -160,8 +361,9 @@ class LocalInternshipRepository implements IInternshipRepository {
   }
 
   public getMentorById(mentorId: string): MentorRecord | null {
+    if (!mentorId) return null;
     const q = mentorId.trim().toLowerCase();
-    const found = DEFAULT_MENTORS.find(m => m.id.toLowerCase() === q || m.name.toLowerCase() === q);
+    const found = this.mentors.find(m => m.id.toLowerCase() === q || m.name.toLowerCase() === q || m.email.toLowerCase() === q);
     if (!found) return null;
 
     const assignedStudents = this.getStudentsForMentor(found.id);
@@ -180,14 +382,27 @@ class LocalInternshipRepository implements IInternshipRepository {
   }
 
   // ====================================================
-  // 4. ADMIN SCOPED DATA ACCESS (ENTIRE COLLEGE)
+  // 4. HODS CATALOG ACCESS
+  // ====================================================
+  public getAllHods(): HodRecord[] {
+    return [...this.hods];
+  }
+
+  public getHodByDepartment(departmentCode: string): HodRecord | null {
+    if (!departmentCode) return null;
+    const dept = departmentCode.trim().toUpperCase();
+    return this.hods.find(h => h.departmentCode.toUpperCase() === dept) || null;
+  }
+
+  // ====================================================
+  // 5. ADMIN SCOPED DATA ACCESS
   // ====================================================
   public getAllStudentsForAdmin(): StudentRecord[] {
     return [...this.students];
   }
 
   public getAllMentorsForAdmin(): MentorRecord[] {
-    return DEFAULT_MENTORS.map(m => {
+    return this.mentors.map(m => {
       const assigned = this.getStudentsForMentor(m.id);
       const avgProg = assigned.length > 0 
         ? Math.round(assigned.reduce((sum, s) => sum + s.progress, 0) / assigned.length) 
@@ -209,9 +424,9 @@ class LocalInternshipRepository implements IInternshipRepository {
   }
 
   // ====================================================
-  // 5. MUTATIONS & REAL-TIME LOG SUBMISSIONS
+  // 6. MUTATIONS & LOG SUBMISSIONS (SUPABASE DIRECT)
   // ====================================================
-  public submitStudentDailyLog(
+  public async submitStudentDailyLog(
     studentId: string, 
     log: { 
       work: string; 
@@ -219,20 +434,28 @@ class LocalInternshipRepository implements IInternshipRepository {
       status: StudentRecord['status']; 
       blocker?: string;
     }
-  ): StudentRecord {
+  ): Promise<StudentRecord> {
     const index = this.students.findIndex(
       s => s.studentId.toLowerCase() === studentId.trim().toLowerCase() || s.id.toLowerCase() === studentId.trim().toLowerCase()
     );
 
-    if (index === -1) {
-      throw new Error(`Student record not found for ID: ${studentId}`);
-    }
-
-    const current = this.students[index];
-    const newProgress = Math.min(100, Math.max(0, current.progress + (log.status === 'completed' ? 100 - current.progress : 5)));
+    let current = index !== -1 ? this.students[index] : null;
+    const currentProgress = current ? current.progress : 0;
+    const newProgress = Math.min(100, Math.max(0, currentProgress + (log.status === 'completed' ? 100 - currentProgress : 5)));
 
     const updated: StudentRecord = {
-      ...current,
+      id: current?.id || studentId,
+      studentId: current?.studentId || studentId,
+      studentName: current?.studentName || 'Student Intern',
+      email: current?.email || `${studentId.toLowerCase()}@college.edu`,
+      academicYear: current?.academicYear || '3rd Year',
+      year: current?.year || '3rd Year',
+      departmentCode: current?.departmentCode || 'CSEBS',
+      dept: current?.dept || 'CSEBS',
+      company: current?.company || 'Not Assigned',
+      mentorId: current?.mentorId || 'MENTOR_001',
+      mentor: current?.mentor || 'Faculty Mentor',
+      role: current?.role || 'Intern',
       work: log.work.trim(),
       hours: log.hours,
       status: log.status,
@@ -241,12 +464,87 @@ class LocalInternshipRepository implements IInternshipRepository {
       time: 'Just now',
     };
 
-    this.students[index] = updated;
+    if (index !== -1) {
+      this.students[index] = updated;
+    } else {
+      this.students.unshift(updated);
+    }
+
     this.persistToStorage();
+    this.notifyListeners();
+
+    // Push update directly to Supabase
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        await client
+          .from('students')
+          .update({
+            work: updated.work,
+            hours: updated.hours,
+            status: updated.status,
+            blocker: updated.blocker || null,
+            progress: updated.progress,
+            last_log_at: new Date().toISOString(),
+          })
+          .eq('student_id', updated.studentId);
+
+        // Also write entry to student_daily_logs table
+        await client
+          .from('student_daily_logs')
+          .insert({
+            student_id: updated.studentId,
+            hours_logged: log.hours,
+            work_summary: log.work.trim(),
+            blockers_faced: log.blocker?.trim() || null,
+            status: log.status,
+          });
+      } catch (err) {
+        console.warn('Supabase log submission error:', err);
+      }
+    }
+
     return updated;
   }
 
-  public updateStudentMentor(studentId: string, newMentorId: string, newMentorName: string): void {
+  public async saveStudent(student: StudentRecord): Promise<void> {
+    const index = this.students.findIndex(s => s.studentId.toLowerCase() === student.studentId.toLowerCase());
+    if (index !== -1) {
+      this.students[index] = student;
+    } else {
+      this.students.unshift(student);
+    }
+    this.persistToStorage();
+    this.notifyListeners();
+
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        await client
+          .from('students')
+          .upsert({
+            student_id: student.studentId,
+            student_name: student.studentName,
+            email: student.email || `${student.studentId.toLowerCase()}@college.edu`,
+            department_code: student.departmentCode,
+            academic_year: student.academicYear,
+            company: student.company,
+            role: student.role,
+            mentor_id: student.mentorId,
+            mentor_name: student.mentor,
+            status: student.status,
+            progress: student.progress,
+            hours: student.hours,
+            work: student.work,
+            blocker: student.blocker || null,
+          }, { onConflict: 'student_id' });
+      } catch (err) {
+        console.warn('Supabase save student error:', err);
+      }
+    }
+  }
+
+  public async updateStudentMentor(studentId: string, newMentorId: string, newMentorName: string): Promise<void> {
     const index = this.students.findIndex(s => s.studentId === studentId || s.id === studentId);
     if (index !== -1) {
       this.students[index] = {
@@ -255,18 +553,38 @@ class LocalInternshipRepository implements IInternshipRepository {
         mentor: newMentorName,
       };
       this.persistToStorage();
+      this.notifyListeners();
+
+      const client = getSupabaseClient();
+      if (client) {
+        try {
+          await client
+            .from('students')
+            .update({
+              mentor_id: newMentorId,
+              mentor_name: newMentorName,
+            })
+            .eq('student_id', this.students[index].studentId);
+        } catch (err) {
+          console.warn('Failed to sync mentor reassignment to Supabase:', err);
+        }
+      }
     }
   }
 
   public replaceDataset(newStudents: StudentRecord[]): void {
     this.students = this.normalizeStudentRecords(newStudents);
     this.persistToStorage();
+    this.notifyListeners();
   }
 
   public clearAllDataset(): void {
     this.students = [];
+    this.mentors = [];
+    this.hods = [];
     this.persistToStorage();
+    this.notifyListeners();
   }
 }
 
-export const internshipRepository = new LocalInternshipRepository();
+export const internshipRepository = new SupabaseIntegratedRepository();

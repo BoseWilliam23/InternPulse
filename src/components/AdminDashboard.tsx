@@ -379,42 +379,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E3E1EA]">
-                {filteredStudents.map((st) => (
-                  <tr key={st.id} className="hover:bg-[#FBF8FF]">
-                    <td className="p-3.5 font-bold font-mono text-[#1A1B22]">{st.studentId}</td>
-                    <td className="p-3.5 font-bold text-[#1A1B22] bg-emerald-50/20">{st.studentName}</td>
-                    <td className="p-3.5 text-[#57657A]">{st.dept} ({st.year})</td>
-                    <td className="p-3.5 font-medium text-indigo-900 bg-indigo-50/20">{st.mentor}</td>
-                    <td className="p-3.5 text-[#57657A] font-medium">{st.company}</td>
-                    <td className="p-3.5">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-semibold">{st.progress}%</span>
-                        <div className="w-16 bg-[#EFEDF6] h-1.5 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${st.status === 'blocked' ? 'bg-rose-600' : 'bg-[#24389C]'}`}
-                            style={{ width: `${st.progress}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-3.5">
-                      <span className={`px-2 py-0.5 rounded-full font-semibold ${st.status === 'blocked' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                        {st.status}
-                      </span>
-                    </td>
-                    <td className="p-3.5 text-right">
-                      <button
-                        onClick={() => {
-                          setSelectedStudentForMentor(st);
-                          setNewMentorName(st.mentor);
-                        }}
-                        className="text-xs font-semibold text-[#24389C] hover:underline px-2 py-1 rounded bg-[#DEE0FF]/40"
-                      >
-                        Re-assign Guide
-                      </button>
+                {filteredStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-xs text-[#57657A]">
+                      No student records found in registry.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredStudents.map((st) => (
+                    <tr key={st.id} className="hover:bg-[#FBF8FF]">
+                      <td className="p-3.5 font-bold font-mono text-[#1A1B22]">{st.studentId}</td>
+                      <td className="p-3.5 font-bold text-[#1A1B22] bg-emerald-50/20">{st.studentName}</td>
+                      <td className="p-3.5 text-[#57657A]">{st.dept} ({st.year})</td>
+                      <td className="p-3.5 font-medium text-indigo-900 bg-indigo-50/20">{st.mentor}</td>
+                      <td className="p-3.5 text-[#57657A] font-medium">{st.company}</td>
+                      <td className="p-3.5">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-semibold">{st.progress}%</span>
+                          <div className="w-16 bg-[#EFEDF6] h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${st.status === 'blocked' ? 'bg-rose-600' : 'bg-[#24389C]'}`}
+                              style={{ width: `${st.progress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3.5">
+                        <span className={`px-2 py-0.5 rounded-full font-semibold ${st.status === 'blocked' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {st.status}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-right">
+                        <button
+                          onClick={() => {
+                            setSelectedStudentForMentor(st);
+                            setNewMentorName(st.mentor);
+                          }}
+                          className="text-xs font-semibold text-[#24389C] hover:underline px-2 py-1 rounded bg-[#DEE0FF]/40"
+                        >
+                          Re-assign Guide
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -423,24 +431,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* TAB 3: MENTORS */}
       {adminTab === 'mentors' && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {dynamicMentors.map((m) => (
-            <div key={m.name} className="bg-white p-5 rounded-2xl border border-[#E3E1EA] shadow-sm space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-bold text-sm text-[#1A1B22]">{m.name}</h4>
-                  <p className="text-xs text-[#57657A]">{m.dept} Faculty Coordinator</p>
-                </div>
-                <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-800 flex items-center justify-center font-bold text-xs">
-                  👨‍🏫
-                </span>
-              </div>
-              <div className="p-3 bg-[#FBF8FF] rounded-xl border border-[#E3E1EA] flex items-center justify-between text-xs">
-                <span className="text-[#57657A]">Assigned Students:</span>
-                <span className="font-bold text-[#24389C] text-sm">{m.studentsCount}</span>
-              </div>
+        <div>
+          {dynamicMentors.length === 0 ? (
+            <div className="bg-white p-10 rounded-2xl border border-[#E3E1EA] text-center space-y-2">
+              <Users className="w-8 h-8 text-[#757684] mx-auto opacity-50" />
+              <div className="text-sm font-semibold text-[#1A1B22]">No Faculty Mentors with active mentees yet.</div>
+              <p className="text-xs text-[#57657A]">
+                Mentors will appear here as students register and are assigned to faculty coordinators.
+              </p>
             </div>
-          ))}
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {dynamicMentors.map((m) => (
+                <div key={m.name} className="bg-white p-5 rounded-2xl border border-[#E3E1EA] shadow-sm space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-bold text-sm text-[#1A1B22]">{m.name}</h4>
+                      <p className="text-xs text-[#57657A]">{m.dept} Faculty Coordinator</p>
+                    </div>
+                    <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-800 flex items-center justify-center font-bold text-xs">
+                      👨‍🏫
+                    </span>
+                  </div>
+                  <div className="p-3 bg-[#FBF8FF] rounded-xl border border-[#E3E1EA] flex items-center justify-between text-xs">
+                    <span className="text-[#57657A]">Assigned Students:</span>
+                    <span className="font-bold text-[#24389C] text-sm">{m.studentsCount}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -471,24 +491,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* TAB 5: COMPANIES */}
       {adminTab === 'companies' && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {dynamicCompanies.map((comp) => (
-            <div key={comp.name} className="bg-white p-5 rounded-2xl border border-[#E3E1EA] shadow-sm space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-bold text-sm text-[#1A1B22]">{comp.name}</h4>
-                  <p className="text-xs text-[#57657A]">Host Organization Partner</p>
-                </div>
-                <span className="w-8 h-8 rounded-xl bg-[#DEE0FF] text-[#00105C] flex items-center justify-center font-bold text-xs">
-                  🏢
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs pt-2 border-t border-[#E3E1EA]">
-                <span className="text-[#57657A]">Intern Placements:</span>
-                <span className="font-bold text-[#24389C]">{comp.count} Students</span>
-              </div>
+        <div>
+          {dynamicCompanies.length === 0 ? (
+            <div className="bg-white p-10 rounded-2xl border border-[#E3E1EA] text-center space-y-2">
+              <Building2 className="w-8 h-8 text-[#757684] mx-auto opacity-50" />
+              <div className="text-sm font-semibold text-[#1A1B22]">No Host Companies registered yet.</div>
+              <p className="text-xs text-[#57657A]">
+                Organizations will appear as students register their internship host companies.
+              </p>
             </div>
-          ))}
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {dynamicCompanies.map((comp) => (
+                <div key={comp.name} className="bg-white p-5 rounded-2xl border border-[#E3E1EA] shadow-sm space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-bold text-sm text-[#1A1B22]">{comp.name}</h4>
+                      <p className="text-xs text-[#57657A]">Host Organization Partner</p>
+                    </div>
+                    <span className="w-8 h-8 rounded-xl bg-[#DEE0FF] text-[#00105C] flex items-center justify-center font-bold text-xs">
+                      🏢
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-[#E3E1EA]">
+                    <span className="text-[#57657A]">Intern Placements:</span>
+                    <span className="font-bold text-[#24389C]">{comp.count} Students</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
